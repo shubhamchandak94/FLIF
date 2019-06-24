@@ -303,7 +303,8 @@ bool encode_flif(FLIF_UNUSED(int argc), char **argv, Images &images, flif_option
         }
     }
     if (!options.loss && options.palette_size != 0) {
-        desc.push_back("Palette_Alpha");  // try palette (including alpha)
+//        desc.push_back("Palette_Alpha");  // try palette (including alpha)
+//        // WE REMOVE THIS TO BE ABLE TO IGNORE ALPHA
         desc.push_back("Palette");  // try palette (without alpha)
     }
     if (!options.loss) {

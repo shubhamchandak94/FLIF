@@ -62,6 +62,7 @@ void flif_encode_scanlines_inner(IO& io, FLIF_UNUSED(Rac& rac), std::vector<Code
 #endif
     for (int k=0,i=0; k < 5; k++) {
         int p=PLANE_ORDERING[k];
+        if (p==3) continue;
         if (p>=nump) continue;
         i++;
         if (ranges->min(p) >= ranges->max(p)) continue;
@@ -191,6 +192,7 @@ int find_best_predictor(const Images &images, const ColorRanges *ranges, const i
     return best;
 }
 
+// FOR INTERLEAVED ONLY
 template<typename IO, typename Rac, typename Coder>
 void flif_encode_FLIF2_inner(IO& io, Rac& rac, std::vector<Coder> &coders, const Images &images,
                              const ColorRanges *ranges, const int beginZL, const int endZL, flif_options &options) {
@@ -286,6 +288,7 @@ void flif_encode_FLIF2_inner(IO& io, Rac& rac, std::vector<Coder> &coders, const
     if (options.chroma_subsampling && nump>1 && endZL==0) metaCoder.write_int(0, nump-1, 1); // pretend to be interrupted right after Co zoomlevel 1 started
 }
 
+// FOR INTERLEAVED ONLY 
 template<typename IO, typename Rac, typename Coder>
 void flif_encode_FLIF2_pass(IO& io, Rac &rac, const Images &images, const ColorRanges *ranges, std::vector<Tree> &forest, const int beginZL, const int endZL, int repeats, flif_options &options) {
     std::vector<Coder> coders;
@@ -669,6 +672,7 @@ void flif_make_lossy_interlaced(Images &images, const ColorRanges * ranges, int 
 template<typename IO, typename BitChance, typename Rac> void flif_encode_tree(FLIF_UNUSED(IO& io), Rac &rac, const ColorRanges *ranges, const std::vector<Tree> &forest, const flifEncoding encoding)
 {
     for (int p = 0; p < ranges->numPlanes(); p++) {
+        if (p==3) continue;
         Ranges propRanges;
         if (encoding==flifEncoding::nonInterlaced) initPropRanges_scanlines(propRanges, *ranges, p);
         else initPropRanges(propRanges, *ranges, p);
@@ -795,7 +799,9 @@ bool flif_encode(IO& io, Images &images, const std::vector<std::string> &transDe
     }
 
 
-    io.fputs("FLIF");  // bytes 1-4 are fixed magic
+//    io.fputs("FLIF");  // bytes 1-4 are fixed magic
+//    TO SAVE SPACE
+
     // byte 5 encodes color type, interlacing, animation
     // 128 64 32 16 8 4 2 1
     //                                                Gray8    RGB24    RGBA32    Gray16   RGB48    RGBA64
@@ -812,9 +818,10 @@ bool flif_encode(IO& io, Images &images, const std::vector<std::string> &transDe
     //              0 1 0 0   = RGBA (4 planes)       (grayscale + alpha is encoded as RGBA to keep the number of cases low)
     //   0                    = MANIAC trees with default context properties
     //   1                    = (not yet implemented; could be used for other entropy coding methods)
+
     int c=' '+16*(static_cast<uint8_t>(encoding))+numPlanes;
     if (numFrames>1) c += 32;
-    io.fputc(c);
+//    io.fputc(c);
 
     // next byte (byte 6) encodes the bit depth:
     // '1' for 8 bits (1 byte) per channel, '2' for 16 bits (2 bytes) per channel, '0' for custom bit depth
@@ -822,13 +829,13 @@ bool flif_encode(IO& io, Images &images, const std::vector<std::string> &transDe
     c='1';
     for (int p = 0; p < numPlanes; p++) {if (images[0].max(p) != 255) c='2';}
     if (c=='2') {for (int p = 0; p < numPlanes; p++) {if (images[0].max(p) != 65535) c='0';}}
-    io.fputc(c);
+//    io.fputc(c);
 
     Image& image = images[0];
 
     // encode width and height in a variable number of bytes
-    write_big_endian_varint(io, image.cols() - 1);
-    write_big_endian_varint(io, image.rows() - 1);
+//    write_big_endian_varint(io, image.cols() - 1);
+//    write_big_endian_varint(io, image.rows() - 1);
 
     // for animations: number of frames
     if (numFrames>1) {
@@ -841,7 +848,7 @@ bool flif_encode(IO& io, Images &images, const std::vector<std::string> &transDe
     }
 
     // marker to indicate FLIF version (version 0 aka FLIF16 in this case)
-    io.fputc(0);
+//    io.fputc(0);
 
 
     RacOut<IO> rac(io);
@@ -864,8 +871,8 @@ bool flif_encode(IO& io, Images &images, const std::vector<std::string> &transDe
     int alphazero=0;
     if (numPlanes > 3) {
         if (images[0].alpha_zero_special) alphazero=1;
-        if (alphazero) metaCoder.write_int(0,1,1);
-        else metaCoder.write_int(0,1,0);
+//        if (alphazero) metaCoder.write_int(0,1,1);
+//        else metaCoder.write_int(0,1,0);
         if (!alphazero) v_printf(3, ", keep RGB at A=0");
     }
     v_printf(2,")\n");
@@ -877,7 +884,7 @@ bool flif_encode(IO& io, Images &images, const std::vector<std::string> &transDe
     }
 
     if (options.cutoff==2 && options.alpha==19) {
-      metaCoder.write_int(0,1,0); // using default constants for cutoff/alpha
+//      metaCoder.write_int(0,1,0); // using default constants for cutoff/alpha
     } else {
       metaCoder.write_int(0,1,1); // not using default constants
       metaCoder.write_int(1,128,options.cutoff);
@@ -1050,7 +1057,7 @@ bool flif_encode(IO& io, Images &images, const std::vector<std::string> &transDe
       metaCoder.write_int(16, checksum & 0xFFFF);
     } else {
       v_printf(2,"Not writing checksum\n");
-      metaCoder.write_int(0,1,0); // don't write checksum for tiny images or when asked not to
+//      metaCoder.write_int(0,1,0); // don't write checksum for tiny images or when asked not to
     }
     rac.flush();
     io.flush();
